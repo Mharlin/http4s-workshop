@@ -42,7 +42,7 @@
 
                 <center>
                     <small>
-                        <a href="https://github.com/toebbel/http4s-workshop">
+                        <a href="https://github.com/mharlin/http4s-workshop">
                             <img src="github-logo.png" alt="github" style="border-width: 0px; background: none; border: none; box-shadow: none;"/>
                         </a>
                     </small>
@@ -93,6 +93,23 @@
                 </div>
             </section>
             <section>
+                    <h2>Future vs cats.effect</h2>
+
+                    <pre><code data-trim class="scala">
+val x = Future(StdIn.readLine())
+
+(x >> x) &lt;!-&gt; 
+  (Future(StdIn.readLine()) >> Future(StdIn.readLine()))
+                    </code></pre>
+
+                    <pre><code data-trim class="scala">
+val x = IO(StdIn.readLine())
+
+(x >> x) &lt;!-&gt; 
+  (IO(StdIn.readLine()) >> Future(StdIn.readLine()))
+                    </code></pre>
+            </section>
+            <section>
                     <h2>creating effects</h2>
 
                     <pre><code data-trim class="scala">
@@ -115,7 +132,7 @@ val inputs = NonEmptyList.of((1, 2), (3, 4))
 val listOfIO = inputs.map(t => add(t))
 // => : NonEmptyList[IO[Int]]
 
-val singleIO = list.parSequence
+val singleIO = listOfIO.parSequence
 // => : IO[NonEmptyList[Int]]
 
 val result = singleTask.unsafeRunSync()
@@ -134,7 +151,8 @@ def retryWithBackoff[A](ioa: IO[A], initialDelay: FiniteDuration, maxRetries: In
 
     ioa.handleErrorWith { error =>
         if (maxRetries > 0)
-            IO.sleep(initialDelay) *> retryWithBackoff(ioa, initialDelay * 2, maxRetries - 1)
+            IO.sleep(initialDelay) *> 
+              retryWithBackoff(ioa, initialDelay * 2, maxRetries - 1)
         else
             IO.raiseError(error)
     }
@@ -199,9 +217,9 @@ val tweetService = HttpService[IO] {
 HttpService[IO] {
     case GET -> Root / "hello" / name => Ok(s"Hello, $name!")
 
-    case POST -> "ping" => Ok("pong")
+    case POST -> Root / "ping" => Ok("pong")
 
-    case GET -> "hello" /: rest =>
+    case GET -> Root / "hello" /: rest =>
         Ok(s"""Hello, ${rest.toList.mkString(" and ")}!""")
 
     case GET -> Root / "users" / IntVar(userId) =>
