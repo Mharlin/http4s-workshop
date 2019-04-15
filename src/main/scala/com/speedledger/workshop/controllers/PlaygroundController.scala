@@ -6,10 +6,18 @@ import cats.effect._
 import org.http4s._
 import org.http4s.dsl.io._
 
+import scala.util.Try
+
 object PlaygroundController {
 
-  def dateDiff(dateA: LocalDate, dateB: LocalDate) = IO(Duration.between(dateA.atStartOfDay(), dateB.atStartOfDay()).toDays())
+  def dateDiff(dateA: LocalDate, dateB: LocalDate) = IO(Duration.between(dateA.atStartOfDay(), dateB.atStartOfDay()).toDays)
 
+  object LocalDateVar {
+    def unapply(arg: String): Option[LocalDate] = {
+      if (!arg.isEmpty) Try(LocalDate.parse(arg)).toOption
+      else None
+    }
+  }
 
   def apply() = HttpService[IO] {
     // task 0: make this route return the string "pong"

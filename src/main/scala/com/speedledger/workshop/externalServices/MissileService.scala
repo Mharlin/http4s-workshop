@@ -64,6 +64,8 @@ class MissileService {
         missile.copy(status = MissileStatus.MidAir).asRight[MissileServiceError]
   }
 
+  def location(missileId: String) = ???
+
 
   private def changeState(missileId: String)(f: Missile => Either[MissileServiceError, Missile]): Result = {
     for {

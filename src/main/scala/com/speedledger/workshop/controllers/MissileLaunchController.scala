@@ -22,6 +22,9 @@ object MissileLaunchController extends MissileServiceCodec {
     case POST -> Root / "missiles" / missileId / "fire" => {
       missileService.fireMissile(missileId)
     }
+    case GET -> Root / "missiles" / missileId / "location" => {
+      missileService.location(missileId)
+    }
     case GET -> Root / "missiles" => {
       missileService.listMissiles()
     }
