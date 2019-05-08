@@ -42,7 +42,7 @@ object MissileLaunchController extends MissileServiceCodec {
 
         // MissileNotFound must return 404
         // MissileNotInMaintenance must return MethodNotAllowed (405)
-        // MissileNotInMaintenance must return MethodNotAllowed (405)
+        // MissileNotArmed must return MethodNotAllowed (405)
       case _ => ???
     }
   }
