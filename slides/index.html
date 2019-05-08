@@ -35,19 +35,17 @@
 <div class="reveal">
     <div class="slides">
         <section data-markdown>
-            <textarea data-template>
-                # org.http4s
+            <script type="text/template">
+              ### org.http4s
+              ### Functional HTTP Client and Server
 
-                ### Functional HTTP Client and Server
+              ##### Magnus Härlin
+              ##### @MagnusHarlin
+              ##### github.com/Mharlin
 
-                <center>
-                    <small>
-                        <a href="https://github.com/mharlin/http4s-workshop">
-                            <img src="github-logo.png" alt="github" style="border-width: 0px; background: none; border: none; box-shadow: none;"/>
-                        </a>
-                    </small>
-                </center>
-            </textarea>
+              <center><img alt="SpeedLedger" src="speedledger.png" style="border:0px; margin:0px; padding:0px; box-shadow:0px
+              0px" width="450px" /></center>
+            </script>
         </section>
         <section data-markdown>
             <textarea data-template>
@@ -56,7 +54,7 @@
                 - cats.effect
                 - EitherT
                 - http4s server
-                - ~~circe encoder / decoder~~
+                - circe encoder / ~~decoder~~
                 - ~~http4s client~~
             </textarea>
         </section>
@@ -91,23 +89,32 @@
                     <br />
                     Lazy and asynchronous execution (Monad ➡ <em>flatMap</em>!)
                 </div>
+                <aside class="notes">
+                  effect = side effects
+                  control when they happen, you don't get that with Futures
+                  fs2.task was used in http4s before
+                </aside>
             </section>
             <section>
-                    <h2>Future vs cats.effect</h2>
+              <h2>Future vs cats.effect</h2>
 
-                    <pre><code data-trim class="scala">
+              <pre><code data-trim class="scala">
 val x = Future(StdIn.readLine())
 
 (x >> x) &lt;!-&gt; 
   (Future(StdIn.readLine()) >> Future(StdIn.readLine()))
-                    </code></pre>
+              </code></pre>
 
-                    <pre><code data-trim class="scala">
+              <pre class="fragment"><code data-trim class="scala">
 val x = IO(StdIn.readLine())
 
-(x >> x) &lt;!-&gt; 
-  (IO(StdIn.readLine()) >> Future(StdIn.readLine()))
-                    </code></pre>
+(x >> x) &lt;-&gt; 
+  (IO(StdIn.readLine()) >> IO(StdIn.readLine()))
+              </code></pre>
+              <aside class="notes">
+                Future is executed once and then the value is kept
+                IO executes the effect every time it's called.
+              </aside>
             </section>
             <section>
                     <h2>creating effects</h2>
@@ -121,6 +128,12 @@ IO.pure(println("fooooo")) // don't do this
 IO(println("foooo"))
 //def apply[A](body: => A): IO[A] = ???
                     </code></pre>
+                    <aside class="notes">
+                      lift values with pure
+                      pure wraps a value in the effect monad
+                      pure takes a value and if it's a function executes it straight away
+                      apply takes a reference and will not execute it straight away
+                    </aside>
             </section>
             <section>
                     <h2>using effects</h2>
@@ -132,12 +145,17 @@ val inputs = NonEmptyList.of((1, 2), (3, 4))
 val listOfIO = inputs.map(t => add(t))
 // => : NonEmptyList[IO[Int]]
 
-val singleIO = listOfIO.parSequence
+val singletask = listOfIO.parSequence
 // => : IO[NonEmptyList[Int]]
 
 val result = singleTask.unsafeRunSync()
 // => : NonEmptyList[Int]
                     </code></pre>
+                    <aside class="notes">
+                      decouple the creation of the execution strategy
+                      we make the list of effects into a single effect
+                      when running unsafe you shoule have error handling
+                    </aside>
             </section>
             <section>
                 <h2>composing effects</h2>
@@ -151,13 +169,16 @@ def retryWithBackoff[A](ioa: IO[A], initialDelay: FiniteDuration, maxRetries: In
 
     ioa.handleErrorWith { error =>
         if (maxRetries > 0)
-            IO.sleep(initialDelay) *> 
+            IO.sleep(initialDelay) *>
               retryWithBackoff(ioa, initialDelay * 2, maxRetries - 1)
         else
             IO.raiseError(error)
     }
 }
         </code></pre>
+        <aside class="notes">
+          cats.effect uses trampolining of the stack so the recursion depth does not get too long.
+        </aside>
         </section>
     </section>
     <section>
@@ -178,17 +199,102 @@ task.map(result => ???)
 task.value // => : IO[Either[Error, Result]]
 
         </code></pre>
+        <aside class="notes">
+          Tedious mapping over both Task and either
+          EitherT so that you can flatmap straight over the value
+          .value to get back to the type wrapped in IO
+        </aside>
+    </section>
+    <section>
+      <section data-markdown>
+        <textarea data-template data-notes="^Note:">
+          ## Semi automatic encoding
+
+          ```scala
+          object MissileStatus extends Enumeration {
+            type MissileStatus = Value
+            val Maintenance, Armed, MidAir, Exploded = Value
+          }
+
+          case class Missile(missileId: String, status: MissileStatus)
+          ```
+          Note:
+
+        </textarea>
+      </section>
+
+      <section data-markdown>
+        <textarea data-template>
+          ```scala
+          import io.circe.generic.semiauto._
+
+          implicit val missileEncoder: Encoder[Missile] = 
+            deriveEncoder[Missile]
+
+          implicit val missileStatusEncoder: Encoder[MissileStatus.Value] = 
+            Encoder.enumEncoder(MissileStatus)
+          ```
+        </textarea>
+      </section>
+
+      <section data-markdown>
+        <textarea data-template>
+          # Manual encoding
+
+          ```scala
+          sealed trait MissileServiceError
+
+          case class MissileNotFound(missileId: String) 
+            extends MissileServiceError
+
+          case class MissileNotArmed(missileId: String) 
+            extends MissileServiceError
+
+          case class MissileNotInMaintenance(missileId: String) 
+            extends MissileServiceError
+          ```
+        </textarea>
+      </section>
+
+      <section data-markdown>
+        <textarea data-template>
+          ```scala
+          import io.circe.generic.semiauto._
+
+          implicit val errorEncoder: Encoder[MissileServiceError] = 
+            (a: MissileServiceError) => Json.obj(
+              "error" -> Json.fromString(a.getClass.getSimpleName)
+            )
+          ```
+        </textarea>
+      </section>
+
+      <section data-markdown>
+        <textarea data-template>
+          ## Wrap json in a http message
+
+          ```
+          import org.http4s.circe.CirceEntityEncoder._
+          ```
+        </textarea>
+      </section>
     </section>
     <section>
         <section>
             <h1>HTTP4s</h1>
             typeful, functional, streaming
-            
+
             <pre><code data-trim class="scala">
                 import cats.effect._, org.http4s._, org.http4s.dsl.io._
                 import org.http4s.implicits._
                 import scala.concurrent.ExecutionContext.Implicits.global
             </code></pre>
+            <aside class="notes">
+              strive for three things
+              Strongly typed to avoid invalid http messages
+              side effect are wrapped in IO monads
+              streaming, you don't have to have the full response before starting the reply.
+            </aside>
         </section>
         <section>
             <h1>Basics</h1>
@@ -210,6 +316,11 @@ val tweetService = HttpService[IO] {
         getTweet(tweetId).flatMap(Ok(_))
 }
             </code></pre>
+            <aside class="notes">
+              needs to have an implicit encoder in scope
+              encoder can be given explicitly as well
+              Root prevents path prefix. The path starts straight after the dns name.
+            </aside>
         </section>
         <section>
             <h1>Request Matching</h1>
@@ -225,7 +336,7 @@ HttpService[IO] {
     case GET -> Root / "users" / IntVar(userId) =>
         Ok(getUserName(userId))
 
-    case req@GET -> Root / "headers" / headerName =>
+    case req@GET -> Root / "headers" =>
         Ok(req.headers.mkString(", "))
 }
             </code></pre>
@@ -270,7 +381,7 @@ val dailyWeatherService = HttpService[IO] {
             <small><a href="https://http4s.org/v0.18/api/org/http4s/entityencoder$">list of predefined encoders</a></small>
         </section>
         <section>
-            <h1>From Either to Response</h1>
+            <h2>From Either to Response</h2>
             <pre class="strech"><code data-trim class="scala">
 val notFoundPayload = json""" {"error": "missile not found"} """
 
@@ -290,6 +401,7 @@ result.flatMap {
     <section>
         <section>
             <h2>Coding Time</h2>
+            <h3>github.com/mharlin/http4s-workshop</h3>
             <pre><code>
                 PlaygroundControllerTest
             </code></pre>
